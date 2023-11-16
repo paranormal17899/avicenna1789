@@ -1,61 +1,53 @@
-<!DOCTYPE html>
-<html>
-    <head>
-        <title>ChatGPT @ Home</title>
-        <!-- Include Materialize CSS -->
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
-        <!-- Custom CSS -->
-        <style>
-            /* Style for even-indexed messages */
-            .even {
-                background-color: #f5f5f5;
-                padding: 10px;
-                margin: 20px;
-                border-radius: 10px;
-            }
+import streamlit as st
+import openai
+import numpy as np
+from typing import List
 
-            /* Style for odd-indexed messages */
-            .odd {
-                background-color: #b0e3e3;
-                padding: 10px;
-                margin: 20px;
-                border-radius: 10px;
-            }
+# OpenAI API key
+openai.api_key = "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"
 
-            button#reset-button {
-                background-color: #e0e0e0;
-                color: black;
-            }
-        </style>
-    </head>
-<body>
-    <div class="container">
-        <h1>ChatGPT @ Home</h1>
-        {% if history %}
-        <!-- Chat history -->
-        <div id="history" class="card">
-            <div class="card-content">
-                {% for message in history[1:] %} 
-                    <div class="card {% if loop.index % 2 == 0 %}even{% else %}odd{% endif %}">
-                        <p>{{ message }}</p>
-                    </div>
-                {% endfor %}
-            </div>
-        </div>
-        
-            <!-- Chat form -->
-            <form id="chat-form" method="post" class="input-field">
-                <textarea id="input-text" name="input_text"></textarea>
-                <button type="submit" class="btn">Send</button>
-            </form>
+# Initialize session state
+if "messages" not in st.session_state:
+    st.session_state["messages"] = []
+if "user_text" not in st.session_state:
+    st.session_state["user_text"] = ""
 
-            <!-- Reset button -->
-            <button id="reset-button" type="submit" class="btn" form="reset-form">Reset</button>
+# Function to clear chat
+def clear_chat() -> None:
+    st.session_state["messages"] = []
+    st.session_state["user_text"] = ""
+    global user_input
+    user_input = ""
 
-            <!-- Reset form -->
-            <form id="reset-form" method="post" action="/reset">
-            </form>
-        {% endif %}
-    </div>
-</body>
-</html>
+# Function to create a GPT-3 completion
+def create_gpt_completion(ai_model: str, messages: List[dict]) -> dict:
+    completion = openai.ChatCompletion.create(
+        model=ai_model,
+        messages=messages,
+    )
+    return completion
+
+# Function to show chat conversation
+def show_chat(ai_content: str, user_text: str) -> None:
+    st.markdown(f"**User**: {user_text}")
+    st.markdown(f"**AI**: {ai_content}")
+
+# Function to process a chat conversation
+def show_gpt_conversation() -> None:
+    try:
+        completion = create_gpt_completion("text-davinci-002", st.session_state["messages"])
+        ai_content = completion.choices[0].message.content
+        st.session_state["messages"].append({"role": "system", "content": "ты чат бот помощник"})
+        if ai_content:
+            show_chat(ai_content, st.session_state["user_text"])
+            st.session_state["user_text"] = ""
+    except openai.error.InvalidRequestError as err:
+        if "context_length_exceeded" in err.message:  # Исправленная строка
+            st.session_state["messages"].pop(1)
+            if len(st.session_state["messages"]) == 1:
+                st.session_state["user_text"] = ""
+            show_gpt_conversation()
+        else:
+            st.error(err)
+    except (openai.error.OpenAIError, UnboundLocalError) as err:
+        st.error(err)
